@@ -90,7 +90,10 @@ class Pointer:
             if debug:
                 print('[# Pointer {} moving to ({}, {}) with stacks {} #]'
                       .format(self.idx, self.x, self.y, [list(s) for s in self.stacks]), file = sys.stderr)
-            self.instructions.extend(code.get(self.y, {}).get(self.x, ' '))
+            if self.must_skip:
+                self.must_skip = False
+            else:
+                self.instructions.extend(code.get(self.y, {}).get(self.x, ' '))
     
     def exec_instruction(self, instr):
         # skip
@@ -178,13 +181,13 @@ class Pointer:
                     self.stacks = [deque()]
             # duplicate stack
             elif instr == 'd':
-                self.stacks.append(self.stacks[-1])
+                self.stacks.append(list(self.stacks[-1]))
             # length of stack
             elif instr == 'l':
                 self.push(str(len(self.stacks[-1])))
             # execute string
             elif instr == '`':
-                self.instructions.extend(self.pop())
+                self.instructions.extendleft(reversed(self.pop()))
             # get
             elif instr == 'g':
                 y, x = self.pop(), self.pop()
@@ -238,7 +241,6 @@ class Pointer:
             # invalid instruction
             else:
                 raise PotaError('Invalid instruction: ' + instr)
-            
     
     def pop(self):
         return self.stacks[-1].pop()
