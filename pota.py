@@ -278,15 +278,14 @@ getch = _find_getch()
 
 
 def read_code(string):
+    lines = string.splitlines()
+    #shebang
+    if lines[0][-2 :] == '#!':
+        del lines[0]
     code = defaultdict(dict)
-    x = y = 0
-    for c in string:
-        if c == '\n':
-            y += 1
-            x = -1
-        elif c != ' ':
-            code[y][x] = c
-        x += 1
+    for y in range(len(lines)):
+        for x in range(len(lines[y])):
+            code[y][x] = lines[y][x]
     return code
 
 
