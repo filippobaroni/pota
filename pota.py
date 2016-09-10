@@ -181,7 +181,7 @@ class Pointer:
                     self.stacks = [deque()]
             # duplicate stack
             elif instr == 'd':
-                self.stacks.append(list(self.stacks[-1]))
+                self.stacks.append(deque(self.stacks[-1]))
             # length of stack
             elif instr == 'l':
                 self.push(str(len(self.stacks[-1])))
