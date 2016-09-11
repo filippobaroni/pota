@@ -280,7 +280,7 @@ getch = _find_getch()
 def read_code(string):
     lines = string.splitlines()
     #shebang
-    if lines[0][-2 :] == '#!':
+    if lines[0][: 2] == '#!':
         del lines[0]
     code = defaultdict(dict)
     for y in range(len(lines)):
