@@ -2,6 +2,8 @@
 
 from collections import defaultdict, deque
 import itertools
+import random
+import time
 import sys
 
 
@@ -16,7 +18,8 @@ MIRRORS = {
     '/'  : lambda x, y: (-y, -x),
     '\\' : lambda x, y: (y, x),
     '|'  : lambda x, y: (-x, y),
-    '_'  : lambda x, y: (x, -y)
+    '_'  : lambda x, y: (x, -y),
+    'x'  : lambda x, y: random.choice(list(DIRECTIONS.values()))
 }
 
 STACKMANIP = {
@@ -72,6 +75,8 @@ class Pointer:
                 raise PotaError('Tried to pop from empty stack')
             except ZeroDivisionError:
                 raise PotaError('Division by zero')
+            except ValueError:
+                raise PotaError('Cannot convert to integer')
         else:
             self.x += self.direction[0]
             self.y += self.direction[1]
@@ -281,7 +286,7 @@ def read_code(string):
     lines = string.splitlines()
     #shebang
     if lines[0][: 2] == '#!':
-        del lines[0]
+        lines.pop(0)
     code = defaultdict(dict)
     for y in range(len(lines)):
         for x in range(len(lines[y])):
@@ -311,6 +316,9 @@ if __name__ == "__main__":
     options_group.add_argument('-d', '--debug',
                                action = 'store_true',
                                dest = 'debug')
+    options_group.add_argument('-t', '--tick',
+                               type = float,
+                               default = 0.0)
     args = parser.parse_args()
     
     if args.script:
@@ -329,12 +337,19 @@ if __name__ == "__main__":
     ptrs_new = []
     try:
         while len(ptrs):
+            if args.tick > 0:
+                begin_time = time.clock()
             for i, p in list(ptrs.items()):
                 p.move()
                 if not p.alive:
                     del ptrs[i]
             ptrs.update((p.idx, p) for p in ptrs_new)
             ptrs_new = []
+            if args.tick > 0:
+                if time.clock() - begin_time < args.tick:
+                    time.sleep(args.tick - (time.clock() - begin_time))
+            elif args.tick < 0:
+                input()
     except PotaError as e:
         print('Pota! ' + str(e))
         exit(0)
