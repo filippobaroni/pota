@@ -92,8 +92,8 @@ class Pointer:
             elif self.direction[0] > 0 and self.x > max(itertools.chain(code[self.y].keys(), [0])):
                 self.must_skip = False
                 self.x = 0
-            if debug:
-                print('[# Pointer {} moving to ({}, {}) with stacks {} #]'
+            if debug.__contains__(self.idx):
+                print('[# Pointer {:>2} moving to ({:>2}, {:>2})#]'
                       .format(self.idx, self.x, self.y, [list(s) for s in self.stacks]), file = sys.stderr)
             if self.must_skip:
                 self.must_skip = False
@@ -107,14 +107,14 @@ class Pointer:
             return
         # string mode
         elif instr in '"\'' and self.stringmode is None:
-            if debug:
-                print('[# Pointer {} in ({}, {}) entering string mode {} with stacks {} #]'
+            if debug.__contains__(self.idx):
+                print('[# Pointer {:>2} in ({:>2}, {:>2}) entering string mode {} #]'
                       .format(self.idx, self.x, self.y, instr, [list(s) for s in self.stacks]), file = sys.stderr)
             self.stringmode = instr
             self.push('')
         elif instr == self.stringmode:
-            if debug:
-                print('[# Pointer {} in ({}, {}) leaving string mode {} with stacks {} #]'
+            if debug.__contains__(self.idx):
+                print('[# Pointer {:>2} in ({:>2}, {:>2}) leaving string mode {} #]'
                       .format(self.idx, self.x, self.y, self.stringmode, [list(s) for s in self.stacks]), file = sys.stderr)
             self.stringmode = None
         elif self.stringmode:
@@ -123,8 +123,8 @@ class Pointer:
         elif instr == ' ':
             pass
         else:
-            if debug:
-                print('[# Pointer {} in ({}, {}) executing \'{}\' with stacks {} #]'
+            if debug.__contains__(self.idx):
+                print('[# Pointer {:>2} in ({:>2}, {:>2}) executing \'{}\' with stacks {} #]'
                       .format(self.idx, self.x, self.y, instr, [list(s) for s in self.stacks]), file = sys.stderr)
             # change direction
             if instr in DIRECTIONS:
@@ -290,7 +290,8 @@ def read_code(string):
     code = defaultdict(dict)
     for y in range(len(lines)):
         for x in range(len(lines[y])):
-            code[y][x] = lines[y][x]
+            if lines[y][x] != ' ':
+                code[y][x] = lines[y][x]
     return code
 
 
@@ -311,11 +312,12 @@ if __name__ == "__main__":
     code_group.add_argument('-c', '--code')
     options_group = code_group.add_argument_group('options')
     options_group.add_argument('-s', '--stack',
-                               nargs = '+',
+                               nargs = '*',
                                dest = 'stack')
     options_group.add_argument('-d', '--debug',
-                               action = 'store_true',
-                               dest = 'debug')
+                               nargs = '*',
+                               type = int,
+                               default = None)
     options_group.add_argument('-t', '--tick',
                                type = float,
                                default = 0.0)
@@ -329,7 +331,14 @@ if __name__ == "__main__":
     code = read_code(codestr)
     if not args.stack:
         args.stack = []
-    debug = args.debug
+    if args.debug is None:
+        debug = lambda: None
+        debug.__contains__ = lambda item: False
+    elif args.debug == []:
+        debug = lambda: None
+        debug.__contains__ = lambda item: True
+    else:
+        debug = set(args.debug)
     
     ptrs_freeidx = 0
     ptrs = {}
