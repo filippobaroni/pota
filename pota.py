@@ -103,6 +103,7 @@ class Pointer:
                 self.must_skip = False
             else:
                 self.instructions.extend(code.get(self.y, {}).get(self.x, ' '))
+        return self.alive and (not self.instructions or self.instructions[0] != '#')
     
     def exec_instruction(self, instr):
         # skip
@@ -353,18 +354,22 @@ if __name__ == "__main__":
     ptrs[0] = Pointer(stack = args.stack)
     try:
         while ptrs:
-            if args.tick is not None:
-                begin_time = time.clock()
             for i, p in list(ptrs.items()):
-                p.move()
-                if not p.alive:
-                    del ptrs[i]
-            if args.tick is not None:
-                if args.tick > 0:
-                    if time.clock() - begin_time < args.tick:
-                        time.sleep(args.tick - (time.clock() - begin_time))
+                if args.tick is None:
+                    while p.move():
+                        pass
+                    if not p.alive:
+                        del ptrs[i]
                 else:
-                    input()
+                    begin_time = time.clock()
+                    p.move()
+                    if not p.alive:
+                        del ptrs[i]
+                    if args.tick > 0:
+                        if time.clock() - begin_time < args.tick:
+                            time.sleep(args.tick - (time.clock() - begin_time))
+                    else:
+                        input()
     except PotaError as e:
         print('Pota! ' + str(e))
         exit(0)
