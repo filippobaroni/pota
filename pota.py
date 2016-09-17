@@ -23,27 +23,29 @@ MIRRORS = {
 }
 
 STACKMANIP = {
-    # arithmetic
+    # Arith
     '+' : (2, lambda x, y: [str(int(y) + int(x))]),
     '-' : (2, lambda x, y: [str(int(y) - int(x))]),
     '*' : (2, lambda x, y: [str(int(y) * int(x))]),
     '%' : (2, lambda x, y: [str(int(y) // int(x)), str(int(y) % int(x))]),
-    # concat
+    # Concat
     '.' : (2, lambda x, y: [y + x]),
-    # comparison
+    # Cmp
     '=' : (2, lambda x, y: ['1' if y == x else '0']),
     '(' : (2, lambda x, y: ['1' if y < x else '0']),
     ')' : (2, lambda x, y: ['1' if y > x else '0']),
     '[' : (2, lambda x, y: ['1' if int(y) < int(x) else '0']),
     ']' : (2, lambda x, y: ['1' if int(y) > int(x) else '0']),
-    # duplicate
+    # Duplicate
     ',' : (1, lambda x: [x, x]),
-    # pop
+    # Pop
     '~' : (1, lambda x: []),
-    # swap
+    # Swap
     '$' : (2, lambda x, y: [x, y]),
-    # ord to chr
-    'c' : (1, lambda x: [chr(int(x))])
+    # Chr
+    'c' : (1, lambda x: [chr(int(x))]),
+    # Ord
+    'a' : (1, lambda x: [str(ord(x))])
 }
 
 
@@ -67,7 +69,7 @@ class Pointer:
         self.instructions = deque(code.get(self.y, {}).get(self.x, ' '))
     
     def move(self):
-        if len(self.instructions):
+        if self.instructions:
             instr = self.instructions.popleft()
             try:
                 self.exec_instruction(instr)
@@ -77,6 +79,8 @@ class Pointer:
                 raise PotaError('Division by zero')
             except ValueError:
                 raise PotaError('Cannot convert to integer')
+            except TypeError:
+                raise PotaError('Expected a single char')
         else:
             self.x += self.direction[0]
             self.y += self.direction[1]
@@ -126,26 +130,28 @@ class Pointer:
             if debug.__contains__(self.idx):
                 print('[# Pointer {:>2} in ({:>2}, {:>2}) executing \'{}\' with stacks {} #]'
                       .format(self.idx, self.x, self.y, instr, [list(s) for s in self.stacks]), file = sys.stderr)
-            # change direction
+            # Arrows
             if instr in DIRECTIONS:
                 self.direction = DIRECTIONS[instr]
-            # mirrors
+            # Mirrors
             elif instr in MIRRORS:
                 self.direction = MIRRORS[instr](*self.direction)
-            # skip one instruction
+            # Skip
             elif instr == '!':
                 self.must_skip = True
-            # conditional skip
+            # CondSkip
             elif instr == '?':
                 self.must_skip = self.pop() != '0'
-            # where am I?
+            # Where
             elif instr == 'w':
                 self.push(str(self.x))
                 self.push(str(self.y))
-            # jump to
+            # Jump
             elif instr == 'j':
                 self.y, self.x = int(self.pop()), int(self.pop())
-            # push digit
+                if self.x < 0 or self.y < 0:
+                    raise PotaError('Jump to negative position')
+            # Digits
             elif instr in '0123456789':
                 self.push(instr)
             # stack manipulation
@@ -155,77 +161,79 @@ class Pointer:
                 for i in range(cnt):
                     l.append(self.pop())
                 self.stacks[-1].extend(f(*l))
-            # concat entire stack
+            # SConcat
             elif instr == ':':
                 self.stacks[-1] = deque([''.join(self.stacks[-1])])
-            # rotate stack left
+            # Rotate
             elif instr == '{':
                 self.stacks[-1].rotate(-1)
-            # rotate stack right
             elif instr == '}':
                 self.stacks[-1].rotate(1)
-            # reverse stack
+            # Reverse
             elif instr == 'r':
                 self.stacks[-1].reverse()
-            # explode stack
+            # Explode
             elif instr == 'e':
                 self.stacks.append(deque(self.pop()))
-            # new stack
+            # New
             elif instr == 'n':
                 cnt = int(self.pop())
                 new_stack = deque()
                 for i in range(cnt):
                     new_stack.appendleft(self.pop())
                 self.stacks.append(new_stack)
-            # merge current stack with underlying one
+            # Merge
             elif instr == 'm':
                 old_stack = self.stacks.pop()
                 if len(self.stacks):
                     self.stacks[-1].extend(old_stack)
                 else:
                     self.stacks = [deque()]
-            # duplicate stack
+            # SDuplicate
             elif instr == 'd':
                 self.stacks.append(deque(self.stacks[-1]))
-            # length of stack
+            # Length
             elif instr == 'l':
                 self.push(str(len(self.stacks[-1])))
-            # execute string
+            # Exec
             elif instr == '`':
                 self.instructions.extendleft(reversed(self.pop()))
-            # get
+            # Get
             elif instr == 'g':
-                y, x = self.pop(), self.pop()
-                self.push(code.get(int(y), {}).get(int(x), ' '))
-            # put
+                y, x = int(self.pop()), int(self.pop())
+                self.push(code.get(y, {}).get(x, ' '))
+            # Put
             elif instr == 'p':
-                y, x, v = self.pop(), self.pop(), self.pop()
-                code[int(y)][int(x)] = v
-            # new pointer
+                y, x, v = int(self.pop()), int(self.pop()), self.pop()
+                code[y][x] = v
+                if v == ' ':
+                    del code[y][x]
+            # Spawn
             elif instr == '&':
                 cnt = int(self.pop())
                 new_stack = deque()
                 for i in range(cnt):
                     new_stack.appendleft(self.pop())
-                ptrs_new.append(Pointer(stack = new_stack, direction = self.direction,
-                    x = self.x + self.direction[0], y = self.y + self.direction[1]))
-            # wait for message
+                new_ptr = Pointer(stack = new_stack, direction = self.direction,
+                    x = self.x + self.direction[0], y = self.y + self.direction[1])
+                ptrs[new_ptr.idx] = new_ptr
+            # Wait
             elif instr == '#':
                 if len(self.messages):
                     self.push(self.messages.popleft())
                 else:
                     self.instructions.appendleft('#')
-            # send message
+            # Send
             elif instr == '@':
                 at, v = int(self.pop()), self.pop()
-                try:
+                if at in ptrs:
                     ptrs[at].messages.append(v)
-                except KeyError:
+                else:
                     raise PotaError('Pointer {} does not exist'.format(at))
-            # my index
+            # Id
             elif instr == 'y':
                 self.push(str(self.idx))
-            # input
+            # In
             elif instr == 'i':
                 if sys.stdin.isatty():
                     c = getch()
@@ -237,10 +245,10 @@ class Pointer:
                 else:
                     c = sys.stdin.read(1)
                     self.push(c)
-            # output
+            # Out
             elif instr == 'o':
                 self.output(self.pop())
-            # kill
+            # Die
             elif instr == ';':
                 self.alive = False
             # invalid instruction
@@ -320,7 +328,7 @@ if __name__ == "__main__":
                                default = None)
     options_group.add_argument('-t', '--tick',
                                type = float,
-                               default = 0.0)
+                               default = None)
     args = parser.parse_args()
     
     if args.script:
@@ -343,22 +351,20 @@ if __name__ == "__main__":
     ptrs_freeidx = 0
     ptrs = {}
     ptrs[0] = Pointer(stack = args.stack)
-    ptrs_new = []
     try:
-        while len(ptrs):
-            if args.tick > 0:
+        while ptrs:
+            if args.tick is not None:
                 begin_time = time.clock()
             for i, p in list(ptrs.items()):
                 p.move()
                 if not p.alive:
                     del ptrs[i]
-            ptrs.update((p.idx, p) for p in ptrs_new)
-            ptrs_new = []
-            if args.tick > 0:
-                if time.clock() - begin_time < args.tick:
-                    time.sleep(args.tick - (time.clock() - begin_time))
-            elif args.tick < 0:
-                input()
+            if args.tick is not None:
+                if args.tick > 0:
+                    if time.clock() - begin_time < args.tick:
+                        time.sleep(args.tick - (time.clock() - begin_time))
+                else:
+                    input()
     except PotaError as e:
         print('Pota! ' + str(e))
         exit(0)
