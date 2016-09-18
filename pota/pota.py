@@ -1,5 +1,21 @@
 #!/usr/bin/env python3
 
+# Pota interpreter - https://github.com/Delfad0r/pota
+# Copyright © 2016 Filippo Baroni <filippo.gianni.baroni@gmail.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 from collections import defaultdict, deque
 import itertools
 import random
@@ -24,16 +40,16 @@ MIRRORS = {
 
 STACKMANIP = {
     # Arith
-    '+' : (2, lambda x, y: [str(int(y) + int(x))]),
-    '-' : (2, lambda x, y: [str(int(y) - int(x))]),
-    '*' : (2, lambda x, y: [str(int(y) * int(x))]),
-    '%' : (2, lambda x, y: [str(int(y) // int(x)), str(int(y) % int(x))]),
+    '+' : (2, lambda x, y: [int(y) + int(x)]),
+    '-' : (2, lambda x, y: [int(y) - int(x)]),
+    '*' : (2, lambda x, y: [int(y) * int(x)]),
+    '%' : (2, lambda x, y: [int(y) // int(x), int(y) % int(x)]),
     # Concat
-    '.' : (2, lambda x, y: [y + x]),
+    '.' : (2, lambda x, y: [str(y) + str(x)]),
     # Cmp
-    '=' : (2, lambda x, y: ['1' if y == x else '0']),
-    '(' : (2, lambda x, y: ['1' if y < x else '0']),
-    ')' : (2, lambda x, y: ['1' if y > x else '0']),
+    '=' : (2, lambda x, y: ['1' if str(y) == str(x) else '0']),
+    '(' : (2, lambda x, y: ['1' if str(y) < str(x) else '0']),
+    ')' : (2, lambda x, y: ['1' if str(y) > str(x) else '0']),
     '[' : (2, lambda x, y: ['1' if int(y) < int(x) else '0']),
     ']' : (2, lambda x, y: ['1' if int(y) > int(x) else '0']),
     # Duplicate
@@ -45,12 +61,57 @@ STACKMANIP = {
     # Chr
     'c' : (1, lambda x: [chr(int(x))]),
     # Ord
-    'a' : (1, lambda x: [str(ord(x))])
+    'a' : (1, lambda x: [ord(str(x))])
 }
 
 
 class PotaError(Exception):
     pass
+
+
+class Code:
+    
+    def __init__(self, string):
+        lines = string.splitlines()
+        #shebang
+        if lines[0][: 2] == '#!':
+            lines.pop(0)
+        self.code = {}
+        self.maxw = defaultdict(int)
+        self.maxh = defaultdict(int)
+        self.rows = defaultdict(set)
+        self.cols = defaultdict(set)
+        for y in range(len(lines)):
+            for x in range(len(lines[y])):
+                self.set(x, y, lines[y][x])
+    
+    def get(self, x, y):
+        return self.code.get((x, y), ' ')
+    
+    def set(self, x, y, v):
+        if v == ' ':
+            if (x, y) in self.code:
+                del self.code[(x, y)]
+                del self.rows[y][x]
+                if self.maxw[y] == x:
+                    self.maxw[y] = max(0, 0, *self.rows[y])
+                del self.cols[x][y]
+                if self.maxh[x] == y:
+                    self.maxh[x] = max(0, 0, *self.cols[x])
+        else:
+            self.code[(x, y)] = v
+            self.rows[y].add(x)
+            self.cols[x].add(y)
+            if self.maxw[y] < x:
+                self.maxw[y] = x
+            if self.maxh[x] < y:
+                self.maxh[x] = y
+    
+    def get_maxw(self, y):
+        return self.maxw.get(y, 0)
+    
+    def get_maxh(self, x):
+        return self.maxh.get(x, 0)
 
 
 class Pointer:
@@ -66,7 +127,7 @@ class Pointer:
         self.alive = True
         self.must_skip = False
         self.messages = deque()
-        self.instructions = deque(code.get(self.y, {}).get(self.x, ' '))
+        self.instructions = deque(code.get(self.x, self.y))
     
     def move(self):
         if self.instructions:
@@ -86,14 +147,14 @@ class Pointer:
             self.y += self.direction[1]
             if self.direction[1] < 0 and self.y < 0:
                 self.must_skip = False
-                self.y = max(itertools.chain(code.keys(), [0]))
-            elif self.direction[1] > 0 and self.y > max(itertools.chain(code.keys(), [0])):
+                self.y = code.get_maxh(self.x)
+            elif self.direction[1] > 0 and self.y > code.get_maxh(self.x):
                 self.must_skip = False
                 self.y = 0
             if self.direction[0] < 0 and self.x < 0:
                 self.must_skip = False
-                self.x = max(itertools.chain(code[self.y].keys(), [0]))
-            elif self.direction[0] > 0 and self.x > max(itertools.chain(code[self.y].keys(), [0])):
+                self.x = code.get_maxw(self.y)
+            elif self.direction[0] > 0 and self.x > code.get_maxw(self.y):
                 self.must_skip = False
                 self.x = 0
             if debug.__contains__(self.idx):
@@ -102,7 +163,7 @@ class Pointer:
             if self.must_skip:
                 self.must_skip = False
             else:
-                self.instructions.extend(code.get(self.y, {}).get(self.x, ' '))
+                self.instructions.extend(code.get(self.x, self.y))
         return self.alive and (not self.instructions or self.instructions[0] != '#')
     
     def exec_instruction(self, instr):
@@ -124,7 +185,7 @@ class Pointer:
             self.stringmode = None
         elif self.stringmode:
             self.stacks[-1][-1] += instr
-        # do nothing
+        # NOP
         elif instr == ' ':
             pass
         else:
@@ -142,11 +203,11 @@ class Pointer:
                 self.must_skip = True
             # CondSkip
             elif instr == '?':
-                self.must_skip = self.pop() != '0'
+                self.must_skip = str(self.pop()) != '0'
             # Where
             elif instr == 'w':
-                self.push(str(self.x))
-                self.push(str(self.y))
+                self.push(self.x)
+                self.push(self.y)
             # Jump
             elif instr == 'j':
                 self.y, self.x = int(self.pop()), int(self.pop())
@@ -164,7 +225,7 @@ class Pointer:
                 self.stacks[-1].extend(f(*l))
             # SConcat
             elif instr == ':':
-                self.stacks[-1] = deque([''.join(self.stacks[-1])])
+                self.stacks[-1] = deque([''.join(map(str, self.stacks[-1]))])
             # Rotate
             elif instr == '{':
                 self.stacks[-1].rotate(-1)
@@ -175,7 +236,7 @@ class Pointer:
                 self.stacks[-1].reverse()
             # Explode
             elif instr == 'e':
-                self.stacks.append(deque(self.pop()))
+                self.stacks.append(deque(str(self.pop())))
             # New
             elif instr == 'n':
                 cnt = int(self.pop())
@@ -195,20 +256,18 @@ class Pointer:
                 self.stacks.append(deque(self.stacks[-1]))
             # Length
             elif instr == 'l':
-                self.push(str(len(self.stacks[-1])))
+                self.push(len(self.stacks[-1]))
             # Exec
             elif instr == '`':
-                self.instructions.extendleft(reversed(self.pop()))
+                self.instructions.extendleft(reversed(str(self.pop())))
             # Get
             elif instr == 'g':
                 y, x = int(self.pop()), int(self.pop())
-                self.push(code.get(y, {}).get(x, ' '))
+                self.push(code.get(x, y))
             # Put
             elif instr == 'p':
-                y, x, v = int(self.pop()), int(self.pop()), self.pop()
-                code[y][x] = v
-                if v == ' ':
-                    del code[y][x]
+                y, x, v = int(self.pop()), int(self.pop()), str(self.pop())
+                code.set(x, y, v)
             # Spawn
             elif instr == '&':
                 cnt = int(self.pop())
@@ -233,7 +292,7 @@ class Pointer:
                     raise PotaError('Pointer {} does not exist'.format(at))
             # Id
             elif instr == 'y':
-                self.push(str(self.idx))
+                self.push(self.idx)
             # In
             elif instr == 'i':
                 if sys.stdin.isatty():
@@ -248,7 +307,7 @@ class Pointer:
                     self.push(c)
             # Out
             elif instr == 'o':
-                self.output(self.pop())
+                self.output(str(self.pop()))
             # Die
             elif instr == ';':
                 self.alive = False
@@ -266,7 +325,7 @@ class Pointer:
         sys.stdout.write(s)
         sys.stdout.flush()
 
-
+# copy-pasted from the Internet
 def _find_getch():
     try:
         import termios
@@ -287,7 +346,7 @@ def _find_getch():
 
     return _getch
 
-#read single character without waiting for '\n' 
+# read single character without waiting for '\n' 
 getch = _find_getch()
 
 
@@ -310,26 +369,47 @@ ptrs_freeidx = None
 ptrs_new = None
 debug = None
 
-if __name__ == "__main__":
+def main():
     import argparse
     
-    parser = argparse.ArgumentParser()
-    code_group = parser.add_mutually_exclusive_group(required = True)
-    code_group.add_argument('script',
+    global code
+    global ptrs
+    global ptrs_freeidx
+    global ptrs_new
+    global debug
+    
+    parser = argparse.ArgumentParser(description = 'Pota interpreter',
+    usage = '%(prog)s [-h] [<script> | -c <code>] [<options>]')
+    code_group = parser.add_argument_group('code')
+    code_group_mutex = code_group.add_mutually_exclusive_group(required = True)
+    code_group_mutex.add_argument('script',
                             type = argparse.FileType('r'),
-                            nargs = '?')
-    code_group.add_argument('-c', '--code')
-    options_group = code_group.add_argument_group('options')
+                            nargs = '?',
+                            metavar = '<script>',
+                            help = '.pota source file to execute')
+    code_group_mutex.add_argument('-c', '--code',
+                            metavar = '<code>',
+                            help = 'string of Pota instructions to execute')
+    options_group = parser.add_argument_group('options')
     options_group.add_argument('-s', '--stack',
                                nargs = '*',
-                               dest = 'stack')
+                               dest = 'stack',
+                               metavar = '<val>',
+                               help = 'fill the stack before the execution starts')
     options_group.add_argument('-d', '--debug',
                                nargs = '*',
                                type = int,
-                               default = None)
+                               default = None,
+                               metavar = '<ptr>',
+                               help = """enable debug mode for Pointers with id <ptr>;
+                                         use "-d"/"--debug" to enable debug mode for all pointers""")
     options_group.add_argument('-t', '--tick',
                                type = float,
-                               default = None)
+                               default = None,
+                               metavar = '<tick>',
+                               help = """wait at least <tick> seconds between instructions;
+                                         if <tick> is a negative number, then wait for the user
+                                         to press <Enter> before executing the next instruction""")                               
     args = parser.parse_args()
     
     if args.script:
@@ -337,7 +417,7 @@ if __name__ == "__main__":
         args.script.close()
     else:
         codestr = args.code
-    code = read_code(codestr)
+    code = Code(codestr)
     if not args.stack:
         args.stack = []
     if args.debug is None:
@@ -365,7 +445,7 @@ if __name__ == "__main__":
                     p.move()
                     if not p.alive:
                         del ptrs[i]
-                    if args.tick > 0:
+                    if args.tick >= 0:
                         if time.clock() - begin_time < args.tick:
                             time.sleep(args.tick - (time.clock() - begin_time))
                     else:
@@ -377,3 +457,6 @@ if __name__ == "__main__":
         exit(0)
     print()
 
+
+if __name__ == '__main__':
+    main()
