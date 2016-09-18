@@ -141,7 +141,7 @@ class Pointer:
             except ValueError:
                 raise PotaError('Cannot convert to integer')
             except TypeError:
-                raise PotaError('Expected a single char')
+                raise PotaError('Ord failed (expected a single char)')
         else:
             self.x += self.direction[0]
             self.y += self.direction[1]
@@ -191,7 +191,7 @@ class Pointer:
         else:
             if debug.__contains__(self.idx):
                 print('[# Pointer {:>2} in ({:>2}, {:>2}) executing \'{}\' with stacks {} #]'
-                      .format(self.idx, self.x, self.y, instr, [list(s) for s in self.stacks]), file = sys.stderr)
+                      .format(self.idx, self.x, self.y, instr, [list(map(str, s)) for s in self.stacks]), file = sys.stderr)
             # Arrows
             if instr in DIRECTIONS:
                 self.direction = DIRECTIONS[instr]
