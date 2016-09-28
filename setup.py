@@ -3,7 +3,7 @@
 from setuptools import setup, find_packages
 
 setup(name = 'pota',
-      version = '0.1.0',
+      version = '0.1.1',
       description = 'Pota interpreter.',
       author = 'Delfad0r',
       author_email = 'filippo.gianni.baroni@gmail.com',

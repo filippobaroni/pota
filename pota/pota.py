@@ -33,17 +33,17 @@ DIRECTIONS = {
 MIRRORS = { 
     '/'  : lambda x, y: (-y, -x),
     '\\' : lambda x, y: (y, x),
-    '|'  : lambda x, y: (-x, y),
-    '_'  : lambda x, y: (x, -y),
     'x'  : lambda x, y: random.choice(list(DIRECTIONS.values()))
 }
 
 STACKMANIP = {
     # Arith
+    '_' : (1, lambda x: [-int(x)]),
     '+' : (2, lambda x, y: [int(y) + int(x)]),
     '-' : (2, lambda x, y: [int(y) - int(x)]),
     '*' : (2, lambda x, y: [int(y) * int(x)]),
-    '%' : (2, lambda x, y: [int(y) // int(x), int(y) % int(x)]),
+    '|' : (2, lambda x, y: [int(y) // int(x)]),
+    '%' : (2, lambda x, y: [int(y) % int(x)]),
     # Concat
     '.' : (2, lambda x, y: [str(y) + str(x)]),
     # Cmp
@@ -108,24 +108,24 @@ class Code:
                 self.maxh[x] = y
     
     def get_maxw(self, y):
-        return self.maxw.get(y, 0)
+        return max(0, self.maxw.get(y, 0))
     
     def get_maxh(self, x):
-        return self.maxh.get(x, 0)
+        return max(0, self.maxh.get(x, 0))
 
 
 class Pointer:
     
     def __init__(self, stack = [], direction = DIRECTIONS['>'], x = 0, y = 0):
-        global ptrs_freeidx
-        self.idx = ptrs_freeidx
-        ptrs_freeidx += 1
+        global ptrs_freeid
+        self.id = ptrs_freeid
+        ptrs_freeid += 1
         self.direction = direction
         self.stringmode = None
         self.x, self.y = x, y
         self.stacks = [deque(stack)]
         self.alive = True
-        self.must_skip = False
+        self.must_skip = 0
         self.messages = deque()
         self.instructions = deque(code.get(self.x, self.y))
     
@@ -146,42 +146,42 @@ class Pointer:
             self.x += self.direction[0]
             self.y += self.direction[1]
             if self.direction[1] < 0 and self.y < 0:
-                self.must_skip = False
+                self.must_skip = 0
                 self.y = code.get_maxh(self.x)
             elif self.direction[1] > 0 and self.y > code.get_maxh(self.x):
-                self.must_skip = False
+                self.must_skip = 0
                 self.y = 0
             if self.direction[0] < 0 and self.x < 0:
-                self.must_skip = False
+                self.must_skip = 0
                 self.x = code.get_maxw(self.y)
             elif self.direction[0] > 0 and self.x > code.get_maxw(self.y):
-                self.must_skip = False
+                self.must_skip = 0
                 self.x = 0
-            if debug.__contains__(self.idx):
+            if debug.__contains__(self.id):
                 print('[# Pointer {:>2} moving to ({:>2}, {:>2})#]'
-                      .format(self.idx, self.x, self.y, [list(s) for s in self.stacks]), file = sys.stderr)
+                      .format(self.id, self.x, self.y, [list(map(str, s)) for s in self.stacks]), file = sys.stderr)
             if self.must_skip:
-                self.must_skip = False
+                self.must_skip -= 1
             else:
                 self.instructions.extend(code.get(self.x, self.y))
         return self.alive and (not self.instructions or self.instructions[0] != '#')
     
     def exec_instruction(self, instr):
-        # skip
+        # Skip
         if self.must_skip:
-            self.must_skip = False
+            self.must_skip -= 1
             return
-        # string mode
+        # String mode
         elif instr in '"\'' and self.stringmode is None:
-            if debug.__contains__(self.idx):
+            if debug.__contains__(self.id):
                 print('[# Pointer {:>2} in ({:>2}, {:>2}) entering string mode {} #]'
-                      .format(self.idx, self.x, self.y, instr, [list(s) for s in self.stacks]), file = sys.stderr)
+                      .format(self.id, self.x, self.y, instr, [list(map(str, s)) for s in self.stacks]), file = sys.stderr)
             self.stringmode = instr
             self.push('')
         elif instr == self.stringmode:
-            if debug.__contains__(self.idx):
+            if debug.__contains__(self.id):
                 print('[# Pointer {:>2} in ({:>2}, {:>2}) leaving string mode {} #]'
-                      .format(self.idx, self.x, self.y, self.stringmode, [list(s) for s in self.stacks]), file = sys.stderr)
+                      .format(self.id, self.x, self.y, self.stringmode, [list(map(str, s)) for s in self.stacks]), file = sys.stderr)
             self.stringmode = None
         elif self.stringmode:
             self.stacks[-1][-1] += instr
@@ -189,9 +189,9 @@ class Pointer:
         elif instr == ' ':
             pass
         else:
-            if debug.__contains__(self.idx):
+            if debug.__contains__(self.id):
                 print('[# Pointer {:>2} in ({:>2}, {:>2}) executing \'{}\' with stacks {} #]'
-                      .format(self.idx, self.x, self.y, instr, [list(map(str, s)) for s in self.stacks]), file = sys.stderr)
+                      .format(self.id, self.x, self.y, instr, [list(map(str, s)) for s in self.stacks]), file = sys.stderr)
             # Arrows
             if instr in DIRECTIONS:
                 self.direction = DIRECTIONS[instr]
@@ -200,10 +200,15 @@ class Pointer:
                 self.direction = MIRRORS[instr](*self.direction)
             # Skip
             elif instr == '!':
-                self.must_skip = True
+                self.must_skip = 1
             # CondSkip
             elif instr == '?':
-                self.must_skip = str(self.pop()) != '0'
+                self.must_skip = int(str(self.pop()) != '0')
+            # Trampoline
+            elif instr == 't':
+                self.must_skip = int(self.pop())
+                if self.must_skip < 0:
+                    raise PotaError('Negative trampoline')
             # Where
             elif instr == 'w':
                 self.push(self.x)
@@ -223,9 +228,20 @@ class Pointer:
                 for i in range(cnt):
                     l.append(self.pop())
                 self.stacks[-1].extend(f(*l))
-            # SConcat
+            # Flatten
             elif instr == ':':
                 self.stacks[-1] = deque([''.join(map(str, self.stacks[-1]))])
+            # Intercalate
+            elif instr == 'f':
+                sep = self.pop()
+                self.stacks[-1] = deque([sep.join(map(str, self.stacks[-1]))])
+            # Split
+            elif instr == 's':
+                sep, s = self.pop(), self.pop()
+                try:
+                    self.stacks.append(deque(s.split(sep)))
+                except ValueError:
+                    raise PotaError('Cannot split on empty separator')
             # Rotate
             elif instr == '{':
                 self.stacks[-1].rotate(-1)
@@ -276,10 +292,10 @@ class Pointer:
                     new_stack.appendleft(self.pop())
                 new_ptr = Pointer(stack = new_stack, direction = self.direction,
                     x = self.x + self.direction[0], y = self.y + self.direction[1])
-                ptrs[new_ptr.idx] = new_ptr
+                ptrs[new_ptr.id] = new_ptr
             # Wait
             elif instr == '#':
-                if len(self.messages):
+                if self.messages:
                     self.push(self.messages.popleft())
                 else:
                     self.instructions.appendleft('#')
@@ -292,7 +308,7 @@ class Pointer:
                     raise PotaError('Pointer {} does not exist'.format(at))
             # Id
             elif instr == 'y':
-                self.push(self.idx)
+                self.push(self.id)
             # In
             elif instr == 'i':
                 if sys.stdin.isatty():
@@ -350,22 +366,9 @@ def _find_getch():
 getch = _find_getch()
 
 
-def read_code(string):
-    lines = string.splitlines()
-    #shebang
-    if lines[0][: 2] == '#!':
-        lines.pop(0)
-    code = defaultdict(dict)
-    for y in range(len(lines)):
-        for x in range(len(lines[y])):
-            if lines[y][x] != ' ':
-                code[y][x] = lines[y][x]
-    return code
-
-
 code = None
 ptrs = None
-ptrs_freeidx = None
+ptrs_freeid = None
 ptrs_new = None
 debug = None
 
@@ -374,7 +377,7 @@ def main():
     
     global code
     global ptrs
-    global ptrs_freeidx
+    global ptrs_freeid
     global ptrs_new
     global debug
     
@@ -429,7 +432,7 @@ def main():
     else:
         debug = set(args.debug)
     
-    ptrs_freeidx = 0
+    ptrs_freeid = 0
     ptrs = {}
     ptrs[0] = Pointer(stack = args.stack)
     try:
@@ -451,7 +454,7 @@ def main():
                     else:
                         input()
     except PotaError as e:
-        print('Pota! ' + str(e))
+        print('Pota! ' + str(e), file = sys.stderr)
         exit(0)
     except KeyboardInterrupt:
         exit(0)
