@@ -37,8 +37,9 @@ MIRRORS = {
 }
 
 STACKMANIP = {
-    # Arith
+    # Negate
     '_' : (1, lambda x: [-int(x)]),
+    # Arith
     '+' : (2, lambda x, y: [int(y) + int(x)]),
     '-' : (2, lambda x, y: [int(y) - int(x)]),
     '*' : (2, lambda x, y: [int(y) * int(x)]),
@@ -228,10 +229,10 @@ class Pointer:
                 for i in range(cnt):
                     l.append(self.pop())
                 self.stacks[-1].extend(f(*l))
-            # Flatten
+            # Flatten'
             elif instr == ':':
                 self.stacks[-1] = deque([''.join(map(str, self.stacks[-1]))])
-            # Intercalate
+            # Flatten
             elif instr == 'f':
                 sep = self.pop()
                 self.stacks[-1] = deque([sep.join(map(str, self.stacks[-1]))])

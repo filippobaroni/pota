@@ -12,6 +12,6 @@ setup(name = 'pota',
       packages = find_packages(),
       entry_points = {
           'console_scripts' : [
-              'pota=pota.pota:main'
+              'pota = pota.pota:main'
           ]
       })
